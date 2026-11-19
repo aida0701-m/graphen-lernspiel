@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kürzeste Wege in Graphen</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f2f7f4;
+      color: #192d30;
+      font: 1rem/1.5 system-ui, sans-serif;
+    }
+    main { max-width: 48rem; margin: auto; padding: 1.25rem; }
+    h1 { line-height: 1.15; }
+    h2 { font-size: 1.3rem; }
+    section {
+      background: white;
+      border: 1px solid #c8d9d1;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+      color: #154337;
+      background: white;
+      border: 1px solid #77948a;
+      border-radius: .5rem;
+      padding: .45rem .75rem;
+    }
+    button:focus-visible { outline: 3px solid #a34a00; outline-offset: 3px; }
+    button[aria-pressed="true"], #check {
+      background: #006a54;
+      color: white;
+    }
+    #graph {
+      position: relative;
+      aspect-ratio: 560 / 260;
+      background: #eef6f1;
+      border-radius: .75rem;
+    }
+    svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    line { stroke: #708481; stroke-width: 2; vector-effect: non-scaling-stroke; }
+    line.selected { stroke: #006a54; stroke-width: 5; }
+    .node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: clamp(2rem, 8vw, 3rem);
+      aspect-ratio: 1;
+      padding: 0;
+      border: 2px solid #466560;
+      border-radius: 50%;
+      font-weight: bold;
+    }
+    .node.goal { border-style: dashed; }
+    .node.visited { background: #006a54; color: white; }
+    .node.current { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #006a54; }
+    #feedback { background: #edf3f5; border-radius: .5rem; padding: .65rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Kürzeste Wege in Graphen</h1>
+    <p>Jede Kante zählt als ein Schritt. Du kannst sie in beide Richtungen benutzen.</p>
+
+    <nav aria-label="Aufgabenauswahl">
+      <button type="button" data-task="0">Aufgabe 1</button>
+      <button type="button" data-task="1">Aufgabe 2</button>
+    </nav>
+
+    <section aria-labelledby="task-title">
+      <h2 id="task-title"></h2>
+      <p>Du startest bei A. Klicke jeweils auf einen Nachbarknoten. Das Ziel hat einen gestrichelten Rand.</p>
+
+      <div id="graph" role="group" aria-label="Graph mit anklickbaren Knoten">
+        <svg viewBox="0 0 560 260" aria-hidden="true"></svg>
+        <div id="nodes"></div>
+      </div>
+
+      <p aria-live="polite">
+        <strong>Weg:</strong> <span id="path"></span> ·
+        <strong>Kanten:</strong> <span id="length"></span>
+      </p>
+      <button type="button" id="check">Prüfen</button>
+      <button type="button" id="reset">Zurücksetzen</button>
+      <p id="feedback" role="status"></p>
+    </section>
+  </main>
+
+  <script>
+    const tasks = [
+      {
+        points: { A: [70, 130], B: [210, 55], C: [210, 205], D: [350, 130], E: [485, 130] },
+        edges: ['AB', 'AC', 'BD', 'CD', 'DE'],
+        goal: 'E'
+      },
+      {
+        points: { A: [65, 130], B: [180, 56], C: [180, 204], D: [290, 204], E: [395, 204], F: [495, 130] },
+        edges: ['AB', 'BF', 'AC', 'CD', 'DE', 'EF'],
+        goal: 'F'
+      }
+    ];
+
+    const byId = id => document.getElementById(id);
+    const svg = document.querySelector('#graph svg');
+    const taskButtons = document.querySelectorAll('[data-task]');
+    let task, path, neighbors, shortest;
+    let lines, nodeButtons;
+
+    function edgeKey(a, b) {
+      return [a, b].sort().join('');
+    }
+
+    function shortestDistance() {
+      const distances = new Map([['A', 0]]);
+      const queue = ['A'];
+
+      for (const node of queue) {
+        if (node === task.goal) return distances.get(node);
+
+        for (const next of neighbors[node]) {
+          if (!distances.has(next)) {
+            distances.set(next, distances.get(node) + 1);
+            queue.push(next);
+          }
+        }
+      }
+      return Infinity;
+    }
+
+    function message(text) {
+      byId('feedback').textContent = text;
+    }
+
+    function updatePath() {
+      const usedEdges = new Set();
+      for (let index = 1; index < path.length; index++) {
+        usedEdges.add(edgeKey(path[index - 1], path[index]));
+      }
+
+      for (const [key, line] of lines) {
+        line.classList.toggle('selected', usedEdges.has(key));
+      }
+
+      for (const [name, button] of nodeButtons) {
+        button.classList.toggle('visited', path.includes(name));
+        button.classList.toggle('current', path.at(-1) === name);
+      }
+
+      byId('path').textContent = path.join(' → ');
+      byId('length').textContent = path.length - 1;
+    }
+
+    function reset() {
+      path = ['A'];
+      updatePath();
+      message('Wähle einen Knoten, der direkt mit A verbunden ist.');
+    }
+
+    function chooseNode(name) {
+      const current = path.at(-1);
+
+      if (current === task.goal) {
+        message('Du bist schon am Ziel. Prüfe deinen Weg oder setze ihn zurück.');
+        return;
+      }
+      if (!neighbors[current].includes(name)) {
+        message(current === name
+          ? 'Du bist bereits bei ' + name + '. Wähle einen Nachbarknoten.'
+          : 'Zwischen ' + current + ' und ' + name + ' gibt es keine direkte Kante.');
+        return;
+      }
+      if (path.includes(name)) {
+        message('Dieser Knoten liegt schon auf deinem Weg. Wähle einen anderen Knoten oder setze den Weg zurück.');
+        return;
+      }
+
+      path.push(name);
+      updatePath();
+      message(name === task.goal ? 'Du bist am Ziel. Klicke auf „Prüfen“.' : 'Wähle den nächsten Knoten.');
+    }
+
+    function showTask(index) {
+      task = tasks[index];
+      lines = new Map();
+      nodeButtons = new Map();
+      neighbors = Object.fromEntries(Object.keys(task.points).map(name => [name, []]));
+      svg.replaceChildren();
+      byId('nodes').replaceChildren();
+
+      for (const [a, b] of task.edges) {
+        neighbors[a].push(b);
+        neighbors[b].push(a);
+
+        const [x1, y1] = task.points[a];
+        const [x2, y2] = task.points[b];
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+
+        for (const [attribute, value] of Object.entries({ x1, y1, x2, y2 })) {
+          line.setAttribute(attribute, value);
+        }
+
+        svg.append(line);
+        lines.set(edgeKey(a, b), line);
+      }
+
+      for (const [name, [x, y]] of Object.entries(task.points)) {
+        const button = document.createElement('button');
+        const label = name === 'A' ? ', Start' : name === task.goal ? ', Ziel' : '';
+        button.type = 'button';
+        button.className = name === task.goal ? 'node goal' : 'node';
+        button.textContent = name;
+        button.setAttribute('aria-label', 'Knoten ' + name + label + '. Nachbarn: ' + neighbors[name].join(', '));
+        button.style.left = (x / 560 * 100) + '%';
+        button.style.top = (y / 260 * 100) + '%';
+        button.addEventListener('click', () => chooseNode(name));
+        byId('nodes').append(button);
+        nodeButtons.set(name, button);
+      }
+
+      shortest = shortestDistance();
+      byId('task-title').textContent = 'Finde einen kürzesten Weg von A nach ' + task.goal + '.';
+      taskButtons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
+      reset();
+    }
+
+    byId('check').addEventListener('click', () => {
+      const length = path.length - 1;
+
+      if (path.at(-1) !== task.goal) {
+        message('Dein Weg endet bei ' + path.at(-1) + '. Das Ziel ' + task.goal + ' ist noch nicht erreicht.');
+      } else if (length === shortest) {
+        message('Richtig! Mit ' + length + ' Kanten hast du einen kürzesten Weg gefunden.');
+      } else {
+        message('Dein Weg ist gültig und hat ' + length + ' Kanten. Es geht kürzer. Setze den Weg zurück und probiere eine andere Verbindung.');
+      }
+    });
+
+    byId('reset').addEventListener('click', reset);
+    taskButtons.forEach((button, index) => button.addEventListener('click', () => showTask(index)));
+    showTask(0);
+  </script>
+</body>
+</html>
