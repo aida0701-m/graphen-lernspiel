@@ -6,493 +6,719 @@
   <title>Graphenlabor – Kürzeste Wege und Spannbäume</title>
   <style>
     :root {
-      font: 100%/1.55 system-ui, sans-serif;
-      color: #18342e;
-      background: #edf5ef;
-      --accent: #145c48;
-      --border: #b4ccc0;
+      font: 16px/1.5 system-ui, sans-serif;
+      color: #182e2c;
+      background: #eef5f1;
+      --accent: #075f51;
+      --border: #bacfc5;
     }
 
     * { box-sizing: border-box; }
     body { margin: 0; }
-    main { max-width: 58rem; margin: auto; padding: 2rem 1rem; }
-    h1 { font-size: clamp(2.3rem, 7vw, 4rem); line-height: 1.05; margin: 0 0 .5rem; }
-    h2 { font-size: 1.4rem; margin: 0 0 .5rem; }
-    p { margin: 0 0 .8rem; }
-    nav, .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .85rem 0; }
-    section { background: white; border: 1px solid var(--border); border-radius: 1rem; padding: 1rem; }
+    main { max-width: 74rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+    h1 { font-size: clamp(2.4rem, 7vw, 4rem); letter-spacing: -.045em; margin: 0; }
+    h2 { margin: 0 0 .6rem; font-size: 1.3rem; }
+    p { margin: .4rem 0 .8rem; }
+    nav, .bar { display: flex; flex-wrap: wrap; gap: .45rem; margin: .7rem 0; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1rem; }
 
-    button, select, textarea { font: inherit; }
-    button {
-      color: var(--accent);
+    section {
+      min-width: 0;
       background: white;
-      border: 1px solid #779a89;
-      border-radius: .55rem;
-      padding: .45rem .75rem;
-      font-weight: 650;
-      cursor: pointer;
-    }
-
-    button[aria-pressed="true"], .primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
-
-    button:disabled { opacity: .55; cursor: default; }
-    :focus-visible { outline: 3px solid #9b4c00; outline-offset: 3px; }
-    [hidden] { display: none !important; }
-
-    #graph {
-      position: relative;
-      aspect-ratio: 600 / 320;
-      min-height: 12rem;
       border: 1px solid var(--border);
-      border-radius: .8rem;
-      background: radial-gradient(#b9cfc3 1px, transparent 1px) #f4faf6;
+      border-radius: 1rem;
+      padding: 1rem;
+    }
+
+    button, select, textarea { font: inherit; color: inherit; }
+    button, select {
+      max-width: 100%;
+      border: 1px solid #77998e;
+      border-radius: .45rem;
+      background: white;
+      padding: .4rem .65rem;
+    }
+
+    button { cursor: pointer; }
+    button:hover { background: #e5f1ea; }
+    button[aria-pressed="true"], .primary { background: var(--accent); color: white; }
+    button:disabled { opacity: .55; cursor: default; }
+    :focus-visible { outline: 3px solid #9e4a00; outline-offset: 3px; }
+
+    #canvas {
+      position: relative;
+      aspect-ratio: 640 / 420;
+      min-height: 16rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: .65rem;
+      background: radial-gradient(#abc4bb 1px, transparent 1px) #f2f8f4;
       background-size: 16px 16px;
     }
 
-    svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-    line { stroke: #728a80; stroke-width: 2; vector-effect: non-scaling-stroke; }
-    line.used { stroke: var(--accent); stroke-width: 5; }
-    line.added { stroke-dasharray: 7 4; }
+    #canvas.placing { cursor: crosshair; }
+    svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    line { stroke: #647f76; stroke-width: 2; vector-effect: non-scaling-stroke; }
+    line.trial { stroke: #2254a0; stroke-width: 4; }
+    line.route { stroke: var(--accent); stroke-width: 5; }
+    line.cycle { stroke: #a34412; stroke-width: 4; stroke-dasharray: 7 4; }
 
     .node {
       position: absolute;
       transform: translate(-50%, -50%);
-      display: grid;
-      place-items: center;
-      width: clamp(2.6rem, 8vw, 3.2rem);
-      aspect-ratio: 1;
+      width: 2.35rem;
+      height: 2.35rem;
       padding: 0;
-      border: 2px solid var(--accent);
+      border: 2px solid #35645b;
       border-radius: 50%;
+      font-weight: 750;
+      touch-action: manipulation;
     }
 
-    .node.visited { background: var(--accent); color: white; }
+    .node.start { border-width: 4px; }
     .node.goal { border-style: dashed; }
-    .node.current, .node.selected { box-shadow: 0 0 0 2px white, 0 0 0 4px #9b4c00; }
+    .node.visited { background: var(--accent); color: white; }
+    .node.component { box-shadow: inset 0 0 0 3px var(--component); }
+    .node.selected, .node.current { outline: 3px solid #9e4a00; outline-offset: 2px; }
+    .details, #feedback { padding: .55rem .75rem; border-radius: .5rem; background: #edf5f2; overflow-wrap: anywhere; }
 
-    #summary { margin: .85rem 0; overflow-wrap: anywhere; }
-    #feedback { padding: .65rem .8rem; border-radius: .5rem; background: #eaf4ef; }
-    #prediction { margin: 1rem 0; padding: .75rem; border: 1px solid var(--border); }
-    #prediction select { max-width: 100%; margin-bottom: .5rem; }
     label { display: block; font-weight: 650; margin: .7rem 0 .25rem; }
-    textarea {
-      display: block;
-      width: 100%;
-      min-height: 5rem;
-      padding: .6rem;
-      border: 1px solid #779a89;
-      border-radius: .5rem;
-      resize: vertical;
+    textarea { width: 100%; min-height: 7rem; resize: vertical; padding: .6rem; border: 1px solid #77998e; border-radius: .45rem; }
+    ol { padding-left: 1.4rem; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 820px) {
+      .layout { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Graphenlabor</h1>
-    <p>Arbeitet zu zweit. Wechselt euch beim Bedienen ab und besprecht eure Entscheidungen.</p>
+<main>
+  <h1>Graphenlabor</h1>
+  <p>Erforscht kürzeste Wege und Spannbäume. Wechselt euch beim Bedienen ab und besprecht eure Entscheidungen.</p>
 
-    <nav aria-label="Lernstationen">
-      <button type="button" data-station="routes">Wege vergleichen</button>
-      <button type="button" data-station="edge">Neue Kante testen</button>
-      <button type="button" data-station="tree">Spannbaum bauen</button>
-    </nav>
+  <nav aria-label="Lernaufgaben">
+    <button data-task="paths">Wege vergleichen</button>
+    <button data-task="trials">Kanten untersuchen</button>
+    <button data-task="trees">Spannbäume bauen</button>
+  </nav>
 
-    <section aria-labelledby="title">
-      <h2 id="title"></h2>
-      <p id="instructions"></p>
+  <div class="layout">
+    <section aria-labelledby="graph-title">
+      <h2 id="graph-title">Graph bearbeiten</h2>
+      <div class="bar" aria-label="Werkzeuge">
+        <button data-mode="walk">Weg wählen</button>
+        <button data-mode="add">Knoten setzen</button>
+        <button data-mode="move">Knoten verschieben</button>
+        <button data-mode="connect">Kante setzen</button>
+        <button data-mode="cut">Kante entfernen</button>
+        <button data-mode="delete">Knoten entfernen</button>
+        <button data-mode="start">Start wählen</button>
+        <button data-mode="goal">Ziel wählen</button>
+      </div>
 
-      <div id="graph" role="group" aria-label="Graph mit anklickbaren Knoten">
-        <svg viewBox="0 0 600 320" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <p id="hint"></p>
+      <div id="canvas" role="group" aria-label="Zeichenfläche für den Graphen">
+        <svg viewBox="0 0 640 420" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div id="nodes"></div>
       </div>
+      <p class="details" id="summary"></p>
 
-      <p id="summary" aria-live="polite"></p>
-
-      <div class="actions">
-        <button type="button" class="primary" id="check">Prüfen</button>
-        <button type="button" id="save-route">Weg zum Vergleich merken</button>
-        <button type="button" id="new-route">Neuer Weg</button>
-        <button type="button" id="undo">Rückgängig</button>
-        <button type="button" id="reset">Station zurücksetzen</button>
+      <div class="bar">
+        <button id="undo">Rückgängig</button>
+        <button id="baseline">Ausgangsgraph speichern</button>
+        <button id="restore">Ausgangsgraph laden</button>
+        <button id="example">Beispielgraph laden</button>
+        <button id="empty">Leeren Graphen öffnen</button>
       </div>
 
-      <div id="comparison" hidden>
-        <p id="route-one"></p>
-        <p id="route-two"></p>
+      <div class="bar" aria-label="Analysewerkzeuge">
+        <button id="distance">Kürzeste Weglänge</button>
+        <button id="components" aria-pressed="false">Komponenten markieren</button>
+        <button id="cycle" aria-pressed="false">Kreis hervorheben</button>
       </div>
-
-      <fieldset id="prediction" hidden>
-        <legend>Vermutung vor dem Einfügen</legend>
-        <p id="candidate"></p>
-        <label for="guess">Was passiert mit der kürzesten Weglänge?</label>
-        <select id="guess">
-          <option value="">Bitte auswählen</option>
-          <option value="shorter">Sie wird kürzer.</option>
-          <option value="same">Sie bleibt gleich.</option>
-        </select>
-        <button type="button" id="add-edge">Kante einfügen</button>
-      </fieldset>
-      <p id="experiment-result" hidden></p>
 
       <p id="feedback" role="status"></p>
+    </section>
+
+    <section aria-labelledby="task-title">
+      <h2 id="task-title"></h2>
+      <p id="instructions"></p>
+
+      <div id="paths">
+        <div class="bar">
+          <button id="new-path">Neuer Weg</button>
+          <button id="check-path">Weg prüfen</button>
+          <button id="save-path" class="primary">Weg merken</button>
+        </div>
+        <ol id="path-results" aria-label="Gemerkte Wege"></ol>
+        <p id="comparison"></p>
+      </div>
+
+      <div id="trials" hidden>
+        <p id="candidate"></p>
+        <label for="guess">Eure Vermutung</label>
+        <select id="guess">
+          <option value="">Bitte wählen</option>
+          <option value="shorter">Der kürzeste Weg wird kürzer.</option>
+          <option value="same">Die Weglänge bleibt gleich.</option>
+        </select>
+        <div class="bar">
+          <button id="predict">Versuch vorbereiten</button>
+          <button id="test" class="primary">Kante einfügen und testen</button>
+        </div>
+        <ol id="trial-results" aria-label="Kantenversuche"></ol>
+      </div>
+
+      <div id="trees" hidden>
+        <div class="bar">
+          <button id="save-tree" class="primary">Spannbaum prüfen und merken</button>
+        </div>
+        <ol id="tree-results" aria-label="Gemerkte Spannbäume"></ol>
+      </div>
 
       <label for="notes">Versuchsprotokoll</label>
       <textarea id="notes"></textarea>
-      <div class="actions">
-        <button type="button" id="download">Gesamtes Protokoll herunterladen</button>
-      </div>
-      <p><small>Die Notizen bleiben beim Stationswechsel erhalten. Ladet sie vor dem Schließen der Seite herunter.</small></p>
+      <div class="bar"><button id="download">Protokoll herunterladen</button></div>
+      <p><small>Die Notizen bleiben beim Wechsel zwischen den Aufgaben erhalten. Ladet das Protokoll vor dem Schließen der Seite herunter.</small></p>
     </section>
-  </main>
+  </div>
+</main>
 
-  <script>
-    const stations = {
-      routes: {
-        title: 'Zwei Wege von A nach E vergleichen',
-        instructions: 'Startet bei A und klickt jeweils einen Nachbarknoten an. Merkt euch zwei verschiedene Wege mit der Schaltfläche unter dem Graphen. Vergleicht die Kantenzahlen und prüft eure Wege. Findet danach einen weiteren kürzesten Weg.',
-        prompt: 'Welche zwei Wege habt ihr verglichen? Wie viele Kanten haben sie? Welchen weiteren kürzesten Weg habt ihr gefunden?',
-        positions: { A: [75, 160], B: [220, 65], C: [220, 255], D: [370, 160], E: [520, 160], F: [370, 70] },
-        edges: ['AB', 'AC', 'BD', 'CD', 'DE', 'BF', 'DF'],
-        goal: 'E'
-      },
-      edge: {
-        title: 'Die Wirkung einer neuen Kante untersuchen',
-        instructions: 'Findet und prüft zuerst einen kürzesten Weg von A nach E. Wählt danach zwei unverbundene Knoten und gebt eure Vermutung ab. Fügt die Kante ein und prüft erneut einen kürzesten Weg. Setzt die Station für einen zweiten Versuch zurück.',
-        prompt: 'Welche Kanten habt ihr getestet? Was habt ihr jeweils vermutet? Wie lang war ein kürzester Weg davor und danach? Erklärt den Unterschied.',
-        positions: { A: [75, 100], B: [225, 100], C: [375, 100], E: [525, 100], D: [225, 245] },
-        edges: ['AB', 'BC', 'CE', 'BD'],
-        goal: 'E'
-      },
-      tree: {
-        title: 'Einen Spannbaum konstruieren',
-        instructions: 'Überlegt, welche Kante ihr entfernen könnt, ohne den Graphen zu trennen. Klickt auf die beiden Endknoten dieser Kante. Beobachtet nach jedem Schritt, ob alle Knoten verbunden sind und ob noch ein Kreis vorhanden ist.',
-        prompt: 'Welche Kanten habt ihr entfernt? Begründet, warum euer Ergebnis zusammenhängend und kreisfrei ist.',
-        positions: { A: [95, 85], B: [315, 65], C: [510, 160], D: [315, 255], E: [95, 235] },
-        edges: ['AB', 'BC', 'CD', 'DE', 'AE', 'AD', 'BD']
-      }
-    };
+<script>
+  const $ = id => document.getElementById(id);
+  const svg = document.querySelector('svg');
+  const lessonButtons = [...document.querySelectorAll('[data-task]')];
+  const toolButtons = [...document.querySelectorAll('[data-mode]')];
 
-    const $ = id => document.getElementById(id);
-    const svg = document.querySelector('svg');
-    const stationButtons = document.querySelectorAll('[data-station]');
-    const notebooks = {};
-    const nodeButtons = new Map();
-    let key, task, state, selected, history, savedRoutes;
+  const example = {
+    nodes: { A: [85, 210], B: [225, 95], C: [225, 320], D: [430, 195], E: [555, 195], F: [390, 65] },
+    edges: ['A:B', 'A:C', 'B:D', 'C:D', 'D:E', 'B:F', 'D:F'],
+    start: 'A', goal: 'E', next: 6
+  };
 
-    function edgeKey(a, b) {
-      return [a, b].sort().join('');
+  const lessons = {
+    paths: {
+      title: 'Zwei Wege vergleichen',
+      instruction: 'Markiert im Beispielgraphen zwei verschiedene Wege von A nach E und merkt beide. Vergleicht ihre Kantenzahlen. Baut danach einen eigenen Graphen mit zwei unterschiedlich langen Wegen und prüft, welcher Weg kürzest ist.',
+      prompt: 'Welche Wege habt ihr verglichen? Nennt die Knotenfolgen und erklärt, woran ihr einen kürzesten Weg erkennt.',
+      mode: 'walk'
+    },
+    trials: {
+      title: 'Die Wirkung einer neuen Kante testen',
+      instruction: 'Speichert einen Graphen mit einem Weg von Start zu Ziel. Wählt zwei unverbundene Knoten und gebt vor dem Einfügen eure Vermutung ab. Ladet danach denselben Ausgangsgraphen. Findet eine Kante, die den Weg verkürzt, und eine, die seine Länge unverändert lässt.',
+      prompt: 'Warum hat eine der beiden Kanten den kürzesten Weg verkürzt? Warum blieb er beim anderen Versuch gleich lang?',
+      mode: 'predict'
+    },
+    trees: {
+      title: 'Zwei Spannbäume konstruieren',
+      instruction: 'Speichert einen zusammenhängenden Graphen mit Kreisen. Entfernt Kanten und prüft euren Spannbaum. Ladet danach denselben Ausgangsgraphen und findet einen anderen Spannbaum.',
+      prompt: 'Begründet für beide Lösungen, warum alle Knoten verbunden sind und warum kein Kreis vorhanden ist.',
+      mode: 'cut'
+    }
+  };
+
+  const hints = {
+    walk: 'Klickt nacheinander auf direkt verbundene Nachbarknoten.',
+    add: 'Klickt auf eine freie Stelle, um einen Knoten zu setzen.',
+    move: 'Wählt einen Knoten und klickt auf seine neue Position.',
+    connect: 'Wählt die beiden Endknoten der neuen Kante.',
+    cut: 'Wählt die beiden Endknoten der Kante, die ihr entfernen möchtet.',
+    delete: 'Wählt den Knoten, den ihr samt seinen Kanten entfernen möchtet.',
+    start: 'Wählt den neuen Startknoten.',
+    goal: 'Wählt den neuen Zielknoten.',
+    predict: 'Wählt zwei bisher unverbundene Knoten und gebt eure Vermutung ab.'
+  };
+
+  const clone = value => structuredClone(value);
+  const pair = (a, b) => [a, b].sort().join(':');
+  const edgeName = edge => edge.replace(':', '–');
+  const palette = ['#21665d', '#914517', '#6247a3', '#943554', '#245e9c', '#606911'];
+  const history = [];
+  const notes = {};
+  const comparisons = [];
+  const attempts = [];
+  const trees = [];
+
+  let graph = clone(example);
+  let baseline = null;
+  let baselineId = 0;
+  let lesson = 'paths';
+  let mode = 'walk';
+  let selection = [];
+  let path = ['A'];
+  let showGroups = false;
+  let showCycle = false;
+
+  function analyze(g) {
+    const neighbors = Object.fromEntries(Object.keys(g.nodes).map(name => [name, []]));
+    for (const edge of g.edges) {
+      const [a, b] = edge.split(':');
+      neighbors[a].push(b);
+      neighbors[b].push(a);
     }
 
-    function graphInfo() {
-      const neighbors = Object.fromEntries(
-        Object.keys(task.positions).map(name => [name, []])
-      );
+    const groups = new Map();
+    const parents = new Map();
+    let count = 0;
+    let cycle = [];
 
-      for (const [a, b] of state.edges) {
-        neighbors[a].push(b);
-        neighbors[b].push(a);
-      }
-
-      const visited = new Set();
-      let components = 0;
-      let shortest;
-
-      for (const start of Object.keys(neighbors)) {
-        if (visited.has(start)) continue;
-        components++;
-        const queue = [[start, 0]];
-        visited.add(start);
-
-        for (const [node, distance] of queue) {
-          if (start === 'A' && node === task.goal) shortest = distance;
-          for (const next of neighbors[node]) {
-            if (visited.has(next)) continue;
-            visited.add(next);
-            queue.push([next, distance + 1]);
+    function visit(node, parent) {
+      groups.set(node, count);
+      parents.set(node, parent);
+      for (const next of neighbors[node]) {
+        if (!groups.has(next)) {
+          visit(next, node);
+        } else if (next !== parent && cycle.length === 0) {
+          const chain = [node];
+          while (chain.at(-1) !== next && parents.get(chain.at(-1))) {
+            chain.push(parents.get(chain.at(-1)));
+          }
+          if (chain.at(-1) === next) {
+            cycle = chain.slice(1).map((name, index) => pair(name, chain[index]));
+            cycle.push(pair(node, next));
           }
         }
       }
-
-      return {
-        neighbors,
-        components,
-        shortest,
-        hasCycle: state.edges.size > visited.size - components
-      };
     }
 
-    function say(text) {
-      $('feedback').textContent = text;
+    for (const node of Object.keys(neighbors)) {
+      if (groups.has(node)) continue;
+      count++;
+      visit(node, null);
     }
 
-    function remember() {
-      history.push({ ...state, edges: new Set(state.edges), path: [...state.path] });
-    }
-
-    function pathText(path) {
-      return path.join(' → ') + ' · ' + (path.length - 1) + ' Kanten';
-    }
-
-    function render() {
-      const info = graphInfo();
-      const usedEdges = new Set(
-        state.path.slice(1).map((node, index) => edgeKey(state.path[index], node))
-      );
-
-      svg.replaceChildren();
-      for (const edge of state.edges) {
-        const [a, b] = edge;
-        const [x1, y1] = task.positions[a];
-        const [x2, y2] = task.positions[b];
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        for (const [name, value] of Object.entries({ x1, y1, x2, y2 })) {
-          line.setAttribute(name, value);
+    const distances = new Map();
+    if (g.start) {
+      const queue = [g.start];
+      distances.set(g.start, 0);
+      for (const node of queue) {
+        for (const next of neighbors[node]) {
+          if (distances.has(next)) continue;
+          distances.set(next, distances.get(node) + 1);
+          queue.push(next);
         }
-        line.classList.toggle('used', usedEdges.has(edge));
-        line.classList.toggle('added', state.experiment?.edge === edge);
-        svg.append(line);
-      }
-
-      for (const [name, button] of nodeButtons) {
-        button.classList.toggle('goal', name === task.goal);
-        button.classList.toggle('visited', state.path.includes(name));
-        button.classList.toggle('current', !state.choosing && name === state.path.at(-1));
-        button.classList.toggle('selected', selected?.includes(name) ?? false);
-        const neighborList = info.neighbors[name].join(', ') || 'keine';
-        const role = name === task.goal ? ', Ziel' : task.goal && name === 'A' ? ', Start' : '';
-        button.setAttribute('aria-label', 'Knoten ' + name + role + '. Nachbarn: ' + neighborList);
-      }
-
-      $('summary').textContent = task.goal
-        ? 'Aktueller Weg: ' + pathText(state.path)
-        : state.edges.size + ' Kanten · '
-          + (info.components === 1 ? 'zusammenhängend' : info.components + ' getrennte Teile')
-          + ' · ' + (info.hasCycle ? 'enthält einen Kreis' : 'kreisfrei');
-
-      $('check').hidden = state.choosing;
-      $('check').textContent = task.goal ? 'Weg prüfen' : 'Spannbaum prüfen';
-      $('new-route').hidden = !task.goal || state.choosing;
-      $('save-route').hidden = key !== 'routes';
-      $('save-route').disabled = state.path.at(-1) !== task.goal;
-      $('undo').disabled = !history.length && !selected;
-      $('comparison').hidden = key !== 'routes';
-      $('route-one').textContent = 'Weg 1: ' + (savedRoutes[0] ? pathText(savedRoutes[0]) : 'noch offen');
-      $('route-two').textContent = 'Weg 2: ' + (savedRoutes[1] ? pathText(savedRoutes[1]) : 'noch offen');
-
-      $('prediction').hidden = !state.choosing;
-      $('candidate').textContent = selected?.length === 2
-        ? 'Gewählte Kante: ' + selected.join('–')
-        : 'Wählt zwei bisher unverbundene Knoten.';
-      $('add-edge').disabled = selected?.length !== 2 || !$('guess').value;
-
-      const result = state.experiment;
-      $('experiment-result').hidden = !result;
-      $('experiment-result').textContent = result
-        ? 'Versuch mit ' + result.edge.split('').join('–') + ' · Vorher: '
-          + result.before + ' Kanten · Vermutung: ' + (result.guess === 'shorter' ? 'kürzer' : 'gleich lang')
-          + (result.after === undefined ? '' : ' · Nachher: ' + result.after + ' Kanten')
-        : '';
-    }
-
-    function chooseNode(name) {
-      if (key === 'tree' || state.choosing) {
-        if (!selected || selected.length === 2) {
-          selected = [name];
-          $('guess').value = '';
-          render();
-          say('Wählt jetzt den zweiten Knoten.');
-          return;
-        }
-
-        const first = selected[0];
-        const edge = edgeKey(first, name);
-        const exists = state.edges.has(edge);
-
-        if (first === name || exists !== (key === 'tree')) {
-          say(first === name ? 'Wählt einen anderen Knoten.'
-            : exists ? 'Diese Kante gibt es bereits.' : 'Zwischen diesen Knoten liegt keine Kante.');
-          return;
-        }
-
-        if (key === 'tree') {
-          remember();
-          state.edges.delete(edge);
-          selected = null;
-          say('Kante ' + first + '–' + name + ' entfernt. Besprecht, was sich verändert hat.');
-        } else {
-          selected = [first, name];
-          say('Gebt eure Vermutung ab, bevor ihr die Kante einfügt.');
-        }
-        render();
-        return;
-      }
-
-      const current = state.path.at(-1);
-      if (current === task.goal) {
-        say('Ihr seid am Ziel. Prüft den Weg oder beginnt einen neuen Versuch.');
-      } else if (!state.edges.has(edgeKey(current, name))) {
-        say('Wählt einen direkt mit ' + current + ' verbundenen Knoten.');
-      } else if (state.path.includes(name)) {
-        say('Dieser Knoten liegt bereits auf eurem Weg. Nutzt bei Bedarf „Rückgängig“.');
-      } else {
-        remember();
-        state.path.push(name);
-        render();
-        say(name === task.goal ? 'Ziel erreicht. Ihr könnt den Weg jetzt prüfen.' : 'Wählt den nächsten Knoten.');
       }
     }
 
-    function openStation(next) {
-      if (key) notebooks[key] = $('notes').value;
-      key = next;
-      task = stations[key];
-      state = { edges: new Set(task.edges), path: task.goal ? ['A'] : [], choosing: false };
-      history = [];
-      savedRoutes = [];
-      selected = null;
-      $('guess').value = '';
-      $('notes').value = notebooks[key] ?? '';
-      $('notes').placeholder = task.prompt;
-      $('title').textContent = task.title;
-      $('instructions').textContent = task.instructions;
+    return { groups, count, cycle, distance: distances.get(g.goal) };
+  }
 
-      nodeButtons.clear();
-      $('nodes').replaceChildren();
-      for (const [name, [x, y]] of Object.entries(task.positions)) {
-        const button = document.createElement('button');
+  function graphKey(g) {
+    return JSON.stringify([Object.keys(g.nodes).sort(), [...g.edges].sort(), g.start, g.goal]);
+  }
+
+  function say(text) { $('feedback').textContent = text; }
+  function resetPath() { path = graph.start ? [graph.start] : []; }
+  function remember() { history.push({ graph: clone(graph), path: [...path] }); }
+
+  function change(action, message) {
+    remember();
+    action();
+    selection = [];
+    $('guess').value = '';
+    resetPath();
+    render();
+    say(message);
+  }
+
+  function pathText(nodes) {
+    const length = nodes.length - 1;
+    return nodes.join(' → ') + ' · ' + length + (length === 1 ? ' Kante' : ' Kanten');
+  }
+
+  function trialText(trial) {
+    const guess = trial.guess === 'shorter' ? 'kürzer' : 'gleich lang';
+    return 'Ausgangsgraph ' + trial.source + ' · Kante ' + edgeName(trial.edge)
+      + ' · Vermutung: ' + guess + ' · Vorher ' + trial.before + ', nachher ' + trial.after + ' Kanten';
+  }
+
+  function treeText(tree) {
+    return 'Ausgangsgraph ' + tree.source + ' · Baumkanten: ' + tree.edges.map(edgeName).join(', ');
+  }
+
+  function displayList(id, entries) {
+    $(id).replaceChildren(...entries.map(entry => {
+      const item = document.createElement('li');
+      item.textContent = entry;
+      return item;
+    }));
+  }
+
+  function render() {
+    const info = analyze(graph);
+    const pathEdges = new Set(path.slice(1).map((name, index) => pair(path[index], name)));
+    const latestTrial = attempts.at(-1);
+
+    svg.replaceChildren();
+    for (const edge of graph.edges) {
+      const [a, b] = edge.split(':');
+      const [x1, y1] = graph.nodes[a];
+      const [x2, y2] = graph.nodes[b];
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      for (const [attribute, value] of Object.entries({ x1, y1, x2, y2 })) {
+        line.setAttribute(attribute, value);
+      }
+      line.classList.toggle('route', lesson === 'paths' && pathEdges.has(edge));
+      line.classList.toggle('cycle', showCycle && info.cycle.includes(edge));
+      line.classList.toggle('trial', lesson === 'trials' && latestTrial?.edge === edge
+        && latestTrial.source === baselineId && !baseline.edges.includes(edge));
+      svg.append(line);
+    }
+
+    const container = $('nodes');
+    const buttons = new Map([...container.children].map(button => [button.textContent, button]));
+    for (const [name, button] of buttons) {
+      if (!Object.hasOwn(graph.nodes, name)) button.remove();
+    }
+
+    for (const [name, [x, y]] of Object.entries(graph.nodes)) {
+      let button = buttons.get(name);
+      if (!button) {
+        button = document.createElement('button');
         button.type = 'button';
         button.className = 'node';
         button.textContent = name;
-        button.style.left = (x / 600 * 100) + '%';
-        button.style.top = (y / 320 * 100) + '%';
-        button.addEventListener('click', () => chooseNode(name));
-        nodeButtons.set(name, button);
-        $('nodes').append(button);
+        button.addEventListener('click', event => {
+          event.stopPropagation();
+          selectNode(name);
+        });
+        container.append(button);
       }
-
-      stationButtons.forEach(button =>
-        button.setAttribute('aria-pressed', String(button.dataset.station === key))
-      );
-      render();
-      say(task.goal ? 'Ihr startet bei A. Das Ziel hat einen gestrichelten Rand.'
-        : 'Wählt die Endknoten einer Kante, die ihr entfernen möchtet.');
+      const group = info.groups.get(name);
+      const role = name === graph.start ? ', Start' : name === graph.goal ? ', Ziel' : '';
+      button.style.left = x / 640 * 100 + '%';
+      button.style.top = y / 420 * 100 + '%';
+      button.style.setProperty('--component', palette[(group - 1) % palette.length]);
+      button.classList.toggle('start', name === graph.start);
+      button.classList.toggle('goal', name === graph.goal);
+      button.classList.toggle('component', showGroups);
+      button.classList.toggle('visited', lesson === 'paths' && path.includes(name));
+      button.classList.toggle('current', mode === 'walk' && path.at(-1) === name);
+      button.classList.toggle('selected', selection.includes(name));
+      button.setAttribute('aria-label', 'Knoten ' + name + role + (showGroups ? ', Komponente ' + group : ''));
     }
 
-    $('check').addEventListener('click', () => {
-      const info = graphInfo();
+    const size = Object.keys(graph.nodes).length + ' Knoten · ' + graph.edges.length + ' Kanten';
+    $('summary').textContent = size + ' · Start: ' + (graph.start ?? 'offen')
+      + ' · Ziel: ' + (graph.goal ?? 'offen')
+      + (lesson === 'paths' && path.length ? ' · Weg: ' + pathText(path) : '')
+      + (lesson === 'trees'
+        ? ' · ' + (info.count === 1 ? 'zusammenhängend' : info.count + ' Komponenten')
+          + ' · ' + (info.cycle.length ? 'mit Kreis' : 'kreisfrei')
+        : '');
 
-      if (key === 'tree') {
-        say(info.components === 1 && !info.hasCycle
-          ? 'Ihr habt einen Spannbaum gebaut. Begründet im Protokoll, warum beide Bedingungen erfüllt sind.'
-          : info.components > 1
-            ? 'Der Graph ist getrennt. Macht den letzten Schritt rückgängig oder setzt die Station zurück.'
-            : 'Alle Knoten sind verbunden. Findet eine Kante, die zu einem Kreis gehört.');
-        return;
-      }
+    $('hint').textContent = hints[mode];
+    $('canvas').classList.toggle('placing', mode === 'add' || mode === 'move');
+    $('undo').disabled = history.length === 0 && selection.length === 0;
+    $('restore').disabled = !baseline;
+    $('restore').textContent = baseline ? 'Ausgangsgraph ' + baselineId + ' laden' : 'Ausgangsgraph laden';
+    $('components').setAttribute('aria-pressed', String(showGroups));
+    $('cycle').setAttribute('aria-pressed', String(showCycle));
 
-      if (state.path.at(-1) !== task.goal) {
-        say('Euer Weg hat das Ziel E noch nicht erreicht.');
-        return;
-      }
-
-      const length = state.path.length - 1;
-      if (length !== info.shortest) {
-        say('Euer Weg ist gültig und hat ' + length + ' Kanten. Es gibt einen kürzeren Weg.');
-        return;
-      }
-
-      if (key === 'routes') {
-        say('Richtig. Mit ' + length + ' Kanten habt ihr einen kürzesten Weg gefunden.');
-      } else if (!state.experiment) {
-        remember();
-        state.choosing = true;
-        $('guess').value = '';
-        render();
-        say('Die kürzeste Weglänge beträgt ' + length + ' Kanten. Wählt zwei unverbundene Knoten für euren Versuch.');
-      } else {
-        remember();
-        const experiment = state.experiment;
-        const shorter = length < experiment.before;
-        const correct = shorter === (experiment.guess === 'shorter');
-        state.experiment = { ...experiment, after: length };
-        render();
-        say('Kürzester Weg bestätigt. ' + (correct ? 'Eure Vermutung stimmt.' : 'Das Ergebnis weicht von eurer Vermutung ab.')
-          + ' Erklärt das Ergebnis im Protokoll und testet danach eine andere Kante.');
-      }
+    toolButtons.forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
     });
 
-    $('save-route').addEventListener('click', () => {
-      if (savedRoutes.some(route => route.join('') === state.path.join(''))) {
-        say('Diesen Weg habt ihr schon gemerkt. Probiert einen anderen.');
-        return;
-      }
+    $('candidate').textContent = mode === 'predict' && selection.length === 2
+      ? 'Gewählte Kante: ' + selection.join('–')
+      : 'Wählt zwei bisher unverbundene Knoten für die neue Kante.';
+    $('test').disabled = mode !== 'predict' || selection.length !== 2 || !$('guess').value;
 
-      savedRoutes.push([...state.path]);
-      if (savedRoutes.length > 2) savedRoutes.shift();
-      render();
-      say(savedRoutes.length === 2 ? 'Vergleicht jetzt die beiden Kantenzahlen.'
-        : 'Weg gemerkt. Beginnt einen neuen Weg für den Vergleich.');
-    });
+    const current = comparisons.filter(entry => entry.graph === graphKey(graph));
+    displayList('path-results', current.map(entry => pathText(entry.path)));
 
-    $('guess').addEventListener('change', render);
+    const difference = current.length === 2 ? Math.abs(current[0].path.length - current[1].path.length) : 0;
+    $('comparison').textContent = current.length !== 2 ? ''
+      : difference === 0 ? 'Beide Wege sind gleich lang.'
+      : 'Unterschied: ' + difference + (difference === 1 ? ' Kante.' : ' Kanten.');
 
-    $('add-edge').addEventListener('click', () => {
-      if (selected?.length !== 2 || !$('guess').value) return;
-      const edge = edgeKey(...selected);
-      const before = graphInfo().shortest;
+    displayList('trial-results', attempts.map(trialText));
+    displayList('tree-results', trees.map(treeText));
+  }
+
+  function setMode(next) {
+    mode = next;
+    selection = [];
+    $('guess').value = '';
+    render();
+    say(hints[mode]);
+  }
+
+  function selectNode(name) {
+    if (mode === 'walk') {
+      const last = path.at(-1);
+      if (!graph.start) return say('Legt zuerst einen Start fest.');
+      if (graph.goal && last === graph.goal) return say('Ihr seid am Ziel. Prüft den Weg oder beginnt einen neuen.');
+      if (!graph.edges.includes(pair(last, name))) return say('Wählt einen direkt verbundenen Nachbarknoten.');
+      if (path.includes(name)) return say('Dieser Knoten liegt bereits auf eurem Weg. Nutzt bei Bedarf „Rückgängig“.');
       remember();
-      state.experiment = { edge, before, guess: $('guess').value };
-      state.edges.add(edge);
-      state.choosing = false;
-      state.path = ['A'];
-      selected = null;
+      path.push(name);
       render();
-      say('Die neue Kante ist gestrichelt. Sucht jetzt einen kürzesten Weg im veränderten Graphen.');
-    });
+      return say(name === graph.goal ? 'Ziel erreicht. Prüft oder merkt den Weg.' : 'Wählt den nächsten Knoten.');
+    }
 
-    $('new-route').addEventListener('click', () => {
-      if (state.path.length > 1) remember();
-      state.path = ['A'];
+    if (mode === 'start' || mode === 'goal') {
+      const other = mode === 'start' ? 'goal' : 'start';
+      if (graph[other] === name) return say('Wählt unterschiedliche Knoten für Start und Ziel.');
+      const label = mode === 'start' ? 'Start' : 'Ziel';
+      return change(() => { graph[mode] = name; }, label + ' ist jetzt ' + name + '.');
+    }
+
+    if (mode === 'delete') {
+      return change(() => {
+        delete graph.nodes[name];
+        graph.edges = graph.edges.filter(edge => !edge.split(':').includes(name));
+        if (graph.start === name) graph.start = null;
+        if (graph.goal === name) graph.goal = null;
+      }, 'Knoten ' + name + ' und seine Kanten wurden entfernt.');
+    }
+
+    if (mode === 'add') return say('Wählt eine freie Stelle auf der Zeichenfläche.');
+    if (mode === 'move') {
+      selection = [name];
       render();
-      say('Ihr seid wieder bei A.');
-    });
+      return say('Klickt auf die neue Position für ' + name + '.');
+    }
 
-    $('undo').addEventListener('click', () => {
-      if (selected) {
-        selected = null;
-      } else if (history.length) {
-        state = history.pop();
-      }
+    if (selection.length !== 1) {
+      selection = [name];
       $('guess').value = '';
       render();
-      say('Letzte Änderung am Graphen oder Weg rückgängig gemacht.');
+      return say('Wählt den zweiten Endknoten.');
+    }
+
+    const first = selection[0];
+    if (first === name) return say('Wählt einen anderen Knoten.');
+    const edge = pair(first, name);
+    const exists = graph.edges.includes(edge);
+    if (mode === 'cut' && !exists) return say('Zwischen diesen Knoten liegt keine Kante.');
+    if (mode !== 'cut' && exists) return say('Diese Kante gibt es bereits.');
+
+    if (mode === 'predict') {
+      selection.push(name);
+      render();
+      return say('Gebt eure Vermutung ab, bevor ihr die Kante einfügt.');
+    }
+
+    const removing = mode === 'cut';
+    change(() => {
+      if (removing) graph.edges = graph.edges.filter(value => value !== edge);
+      else graph.edges.push(edge);
+    }, 'Kante ' + edgeName(edge) + (removing ? ' entfernt.' : ' gesetzt.'));
+  }
+
+  $('canvas').addEventListener('click', event => {
+    if (mode !== 'add' && (mode !== 'move' || !selection.length)) return;
+    const rect = $('canvas').getBoundingClientRect();
+    const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+    const x = clamp(event.clientX - rect.left, 24, rect.width - 24) / rect.width * 640;
+    const y = clamp(event.clientY - rect.top, 24, rect.height - 24) / rect.height * 420;
+
+    if (mode === 'move') {
+      const name = selection[0];
+      return change(() => { graph.nodes[name] = [x, y]; }, 'Knoten ' + name + ' verschoben.');
+    }
+
+    if (Object.keys(graph.nodes).length >= 24) return say('Ihr könnt bis zu 24 Knoten setzen.');
+    const number = graph.next;
+    const name = number < 26 ? String.fromCharCode(65 + number) : 'K' + (number + 1);
+    change(() => {
+      graph.next++;
+      graph.nodes[name] = [x, y];
+    }, 'Knoten ' + name + ' gesetzt.');
+  });
+
+  function openLesson(next) {
+    notes[lesson] = $('notes').value;
+    lesson = next;
+    const activity = lessons[lesson];
+    $('task-title').textContent = activity.title;
+    $('instructions').textContent = activity.instruction;
+    $('notes').value = notes[lesson] ?? '';
+    $('notes').placeholder = activity.prompt;
+
+    lessonButtons.forEach(button => {
+      const active = button.dataset.task === lesson;
+      button.setAttribute('aria-pressed', String(active));
+      $(button.dataset.task).hidden = !active;
     });
 
-    $('reset').addEventListener('click', () => openStation(key));
+    setMode(activity.mode);
+  }
 
-    stationButtons.forEach(button => button.addEventListener('click', () => {
-      if (button.dataset.station !== key) openStation(button.dataset.station);
-    }));
+  lessonButtons.forEach(button => button.addEventListener('click', () => openLesson(button.dataset.task)));
+  toolButtons.forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
 
-    $('download').addEventListener('click', () => {
-      notebooks[key] = $('notes').value;
-      const text = ['Versuchsprotokoll – Graphenlabor', ...Object.entries(stations).map(
-        ([id, station]) => station.title + '\n' + (notebooks[id] || 'Noch keine Notizen.')
-      )].join('\n\n');
+  $('undo').addEventListener('click', () => {
+    if (selection.length) selection = [];
+    else if (history.length) ({ graph, path } = history.pop());
+    $('guess').value = '';
+    render();
+    say('Letzte Auswahl oder Änderung am Graphen rückgängig gemacht.');
+  });
 
-      const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'Versuchsprotokoll-Graphenlabor.txt';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $('baseline').addEventListener('click', () => {
+    if (!Object.keys(graph.nodes).length) return say('Setzt zuerst Knoten für euren Ausgangsgraphen.');
+    baseline = clone(graph);
+    baselineId++;
+    render();
+    say('Ausgangsgraph ' + baselineId + ' gespeichert.');
+  });
+
+  $('restore').addEventListener('click', () => {
+    if (!baseline) return;
+    mode = lessons[lesson].mode;
+    change(() => { graph = clone(baseline); }, 'Ausgangsgraph ' + baselineId + ' geladen.');
+  });
+
+  $('example').addEventListener('click', () => {
+    mode = lessons[lesson].mode;
+    change(() => { graph = clone(example); }, 'Beispielgraph geladen.');
+  });
+
+  $('empty').addEventListener('click', () => {
+    mode = 'add';
+    change(() => {
+      graph = { nodes: {}, edges: [], start: null, goal: null, next: 0 };
+    }, 'Setzt eure eigenen Knoten auf die Zeichenfläche.');
+  });
+
+  $('distance').addEventListener('click', () => {
+    if (!graph.start || !graph.goal) return say('Legt zuerst Start und Ziel fest.');
+    const distance = analyze(graph).distance;
+    say(distance === undefined
+      ? 'Zwischen Start und Ziel gibt es keinen Weg.'
+      : 'Kürzeste Weglänge von ' + graph.start + ' nach ' + graph.goal + ': '
+        + distance + (distance === 1 ? ' Kante.' : ' Kanten.'));
+  });
+
+  $('components').addEventListener('click', () => {
+    showGroups = !showGroups;
+    render();
+    const { count, groups } = analyze(graph);
+    const names = Array.from({ length: count }, (_, index) => {
+      const members = [...groups].filter(([, value]) => value === index + 1).map(([name]) => name);
+      return 'Gruppe ' + (index + 1) + ': ' + members.join(', ');
     });
+    say(showGroups ? (count ? names.join(' · ') : 'Der Graph ist leer.') : 'Komponentenmarkierung ausgeblendet.');
+  });
 
-    openStation('routes');
-  </script>
+  $('cycle').addEventListener('click', () => {
+    showCycle = !showCycle;
+    render();
+    const { cycle } = analyze(graph);
+    say(showCycle
+      ? (cycle.length ? 'Ein Kreis ist gestrichelt markiert: ' + cycle.map(edgeName).join(', ') + '.' : 'Der Graph ist kreisfrei.')
+      : 'Kreismarkierung ausgeblendet.');
+  });
+
+  $('new-path').addEventListener('click', () => {
+    if (path.length > 1) remember();
+    resetPath();
+    setMode('walk');
+  });
+
+  $('check-path').addEventListener('click', () => {
+    if (!graph.start || !graph.goal || path.at(-1) !== graph.goal) {
+      return say('Wählt einen vollständigen Weg vom Start bis zum Ziel.');
+    }
+    say(path.length - 1 === analyze(graph).distance
+      ? 'Ihr habt einen kürzesten Weg gefunden.'
+      : 'Euer Weg ist gültig. Es gibt einen Weg mit weniger Kanten.');
+  });
+
+  $('save-path').addEventListener('click', () => {
+    if (!graph.start || !graph.goal || path.at(-1) !== graph.goal) return say('Erreicht zuerst das Ziel.');
+    const key = graphKey(graph);
+    const current = comparisons.filter(entry => entry.graph === key);
+
+    if (current.some(entry => entry.path.join(':') === path.join(':'))) {
+      return say('Diesen Weg habt ihr bereits gemerkt.');
+    }
+    if (current.length === 2) comparisons.splice(comparisons.indexOf(current[0]), 1);
+    comparisons.push({ graph: key, path: [...path] });
+    render();
+    say('Weg gemerkt. Vergleicht die Längen oder wählt einen neuen Weg.');
+  });
+
+  $('predict').addEventListener('click', () => setMode('predict'));
+  $('guess').addEventListener('change', render);
+
+  $('test').addEventListener('click', () => {
+    if (mode !== 'predict' || selection.length !== 2 || !$('guess').value) return;
+    if (!baseline || graphKey(graph) !== graphKey(baseline)) {
+      return say('Speichert zuerst euren Ausgangsgraphen oder ladet ihn für den nächsten Versuch.');
+    }
+
+    const before = analyze(graph).distance;
+    if (before === undefined) return say('Der Ausgangsgraph braucht einen Weg zwischen Start und Ziel.');
+
+    const edge = pair(...selection);
+    const guess = $('guess').value;
+    remember();
+    graph.edges.push(edge);
+    resetPath();
+    selection = [];
+    $('guess').value = '';
+
+    const after = analyze(graph).distance;
+    attempts.push({ edge, guess, before, after, source: baselineId });
+    render();
+
+    const correct = (after < before) === (guess === 'shorter');
+    say((correct ? 'Eure Vermutung stimmt.' : 'Das Ergebnis weicht von eurer Vermutung ab.')
+      + ' Vorher ' + before + ', nachher ' + after + ' Kanten. Die neue Kante ist blau markiert.');
+  });
+
+  $('save-tree').addEventListener('click', () => {
+    if (!baseline || analyze(baseline).count !== 1) {
+      return say('Speichert zuerst einen zusammenhängenden Ausgangsgraphen.');
+    }
+    if (!analyze(baseline).cycle.length) {
+      return say('Wählt einen Ausgangsgraphen mit einem Kreis, damit verschiedene Spannbäume möglich sind.');
+    }
+
+    const sameNodes = Object.keys(graph.nodes).sort().join(':') === Object.keys(baseline.nodes).sort().join(':');
+    if (!sameNodes || graph.edges.some(edge => !baseline.edges.includes(edge))) {
+      return say('Ein Spannbaum enthält alle Knoten und nur Kanten des Ausgangsgraphen.');
+    }
+
+    const info = analyze(graph);
+    if (info.count !== 1) return say('Der Graph ist getrennt. Macht das Entfernen einer Kante rückgängig.');
+    if (info.cycle.length) return say('Alle Knoten sind verbunden. Der Graph enthält noch einen Kreis.');
+
+    const edges = [...graph.edges].sort();
+    const sameSource = trees.filter(tree => tree.source === baselineId);
+    if (sameSource.some(tree => tree.edges.join() === edges.join())) {
+      return say('Diesen Spannbaum habt ihr schon gemerkt. Wählt eine andere Kantenkombination.');
+    }
+
+    trees.push({ source: baselineId, edges });
+    render();
+    say(sameSource.length
+      ? 'Ihr habt zwei verschiedene Spannbäume aus demselben Ausgangsgraphen gefunden. Begründet beide Lösungen.'
+      : 'Erster Spannbaum gemerkt. Ladet denselben Ausgangsgraphen und sucht einen anderen.');
+  });
+
+  $('download').addEventListener('click', () => {
+    notes[lesson] = $('notes').value;
+    const blocks = [
+      ['Wegevergleich', ...comparisons.map(entry => pathText(entry.path)), notes.paths],
+      ['Kantenversuche', ...attempts.map(trialText), notes.trials],
+      ['Spannbäume', ...trees.map(treeText), notes.trees]
+    ];
+    const text = 'Versuchsprotokoll – Graphenlabor\n\n'
+      + blocks.map(block => block.filter(Boolean).join('\n')).join('\n\n');
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'Versuchsprotokoll-Graphenlabor.txt';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  openLesson('paths');
+</script>
 </body>
 </html>
